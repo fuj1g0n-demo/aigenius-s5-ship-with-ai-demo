@@ -2,11 +2,8 @@
 // Feedback / questions widget — the one interactive, code-bearing feature
 // on the site. Client-side only (works on static GitHub Pages, no backend).
 //
-// Carries two intentionally seeded issues for the live demo — do not fix:
-//   - §5.1: renders submissions with `marked` 0.3.19, which has known
-//     regular-expression denial-of-service vulnerabilities. Flagged by Dependabot.
-//   - §5.5: the submit handler (src/lib/feedback.js) has no input validation.
-//     Flagged by Copilot Code Review.
+// The intentionally outdated `marked` renderer remains for the Dependabot demo.
+import { FEEDBACK_LIMITS } from '../lib/feedback.js';
 ---
 <section class="card" id="feedback-widget">
   <h2>Questions &amp; feedback</h2>
@@ -14,17 +11,18 @@
   <form id="feedback-form">
     <div class="field">
       <label for="feedback-name">Name</label>
-      <input id="feedback-name" name="name" type="text" placeholder="Ada" />
+      <input id="feedback-name" name="name" type="text" placeholder="Ada" maxlength={FEEDBACK_LIMITS.name} />
     </div>
     <div class="field">
       <label for="feedback-topic">Topic</label>
-      <input id="feedback-topic" name="topic" type="text" placeholder="Code review" />
+      <input id="feedback-topic" name="topic" type="text" placeholder="Code review" required maxlength={FEEDBACK_LIMITS.topic} />
     </div>
     <div class="field">
       <label for="feedback-message">Message (Markdown supported)</label>
-      <textarea id="feedback-message" name="message" rows="3" placeholder="What did you think?"></textarea>
+      <textarea id="feedback-message" name="message" rows="3" placeholder="What did you think?" required maxlength={FEEDBACK_LIMITS.message}></textarea>
     </div>
     <button type="submit">Submit</button>
+    <p id="feedback-error" role="alert" hidden></p>
   </form>
   <div id="feedback-list" aria-live="polite"></div>
 </section>
@@ -79,13 +77,15 @@
   // FEEDBACK_ANALYTICS_TOKEN is a fake placeholder — see analytics-config.js.
   console.debug('feedback widget ready', FEEDBACK_ANALYTICS_TOKEN.slice(0, 4));
 
-  const form = document.getElementById('feedback-form');
-  const list = document.getElementById('feedback-list');
+  const form = document.querySelector<HTMLFormElement>('#feedback-form');
+  const list = document.querySelector<HTMLElement>('#feedback-list');
+  const error = document.querySelector<HTMLElement>('#feedback-error');
   const escapeHTML = (value) => String(value).replace(/[&<>"']/g, (character) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   })[character]);
 
   function render() {
+    if (!list) return;
     const submissions = loadSubmissions();
     list.innerHTML = submissions
       .slice()
@@ -93,23 +93,45 @@
       .map((s) => {
         const html = renderMarkdown(s.message || '');
         const who = s.name || 'Anonymous';
-        const topic = s.topic || 'General';
+        const topic = s.topic?.trim() || 'General';
         const when = new Date(s.submittedAt).toLocaleString();
         return `<div class="feedback-item"><div class="meta">${escapeHTML(who)} · ${escapeHTML(topic)} · ${when}</div>${html}</div>`;
       })
       .join('');
   }
 
-  form?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const data = new FormData(form);
-    const name = data.get('name');
-    const topic = data.get('topic');
-    const message = data.get('message');
-    saveSubmission(name, topic, message);
-    form.reset();
-    render();
-  });
+  function showError(cause: unknown) {
+    if (!error) return;
+    error.textContent = cause instanceof DOMException
+      ? 'Could not access browser storage. Check storage permissions or available space and try again.'
+      : cause instanceof Error ? cause.message : 'Could not load or save feedback. Please try again.';
+    error.hidden = false;
+  }
 
-  render();
+  if (form && error) {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      error.textContent = '';
+      const data = new FormData(form);
+      try {
+        saveSubmission(data.get('name'), data.get('topic'), data.get('message'));
+      } catch (cause) {
+        showError(cause);
+        return;
+      }
+      form.reset();
+      try {
+        render();
+      } catch (cause) {
+        showError(cause);
+      }
+    });
+  }
+
+  try {
+    render();
+  } catch (cause) {
+    showError(cause);
+  }
 </script>
