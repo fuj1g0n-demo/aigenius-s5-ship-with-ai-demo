@@ -52,4 +52,10 @@ const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL :
     See <a href={`${base}secure-supply-chain/`}>Secure your supply chain</a> for why the
     security beats in this demo live in dependencies and CI/CD, not just application code.
   </p>
+  <h2>Episode 3 lesson: review before you deploy</h2>
+  <p>
+    An AI-generated change is a starting point, not a release decision. Review the pull request
+    for correctness, check its dependencies and workflow permissions, then let CI build and test
+    the result before deploying. If any gate fails, fix the change and run the checks again.
+  </p>
 </Layout>
