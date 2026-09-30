@@ -1,24 +1,44 @@
 // Feedback widget storage + submit handling.
-//
-// NOTE (seeded code-quality issue, brief §5.5): this handler does not validate
-// its inputs — no empty-check, no length cap. Copilot Code Review should flag
-// this as a robustness issue on the live demo. Do not fix ahead of time.
 
 const STORAGE_KEY = 'ship-with-ai-feedback';
+export const FEEDBACK_LIMITS = Object.freeze({ name: 100, topic: 120, message: 5000 });
 
 export function loadSubmissions() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return [];
+  let submissions;
   try {
-    return JSON.parse(raw);
+    submissions = JSON.parse(raw);
   } catch {
-    return [];
+    throw new Error('Saved feedback is unreadable. No feedback has been overwritten.');
   }
+  if (!Array.isArray(submissions)) {
+    throw new Error('Saved feedback is unreadable. No feedback has been overwritten.');
+  }
+  return submissions;
 }
 
-export function saveSubmission(name, message) {
+function validateText(value, field, required) {
+  const label = field[0].toUpperCase() + field.slice(1);
+  if (typeof value !== 'string') {
+    throw new Error(`${label} must be text.`);
+  }
+  const text = value.trim();
+  if (required && !text) {
+    throw new Error(`${label} is required.`);
+  }
+  if (text.length > FEEDBACK_LIMITS[field]) {
+    throw new Error(`${label} must be ${FEEDBACK_LIMITS[field]} characters or fewer.`);
+  }
+  return text;
+}
+
+export function saveSubmission(name, topic, message) {
+  name = validateText(name, 'name', false);
+  topic = validateText(topic, 'topic', true);
+  message = validateText(message, 'message', true);
   const submissions = loadSubmissions();
-  submissions.push({ name, message, submittedAt: new Date().toISOString() });
+  submissions.push({ name, topic, message, submittedAt: new Date().toISOString() });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(submissions));
   return submissions;
 }
